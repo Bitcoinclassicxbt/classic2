@@ -12,7 +12,7 @@ Please report bugs using the issue tracker at github:
 Classic2 network changes
 ========================
 
-- Removed the artificial block spacing mechanism and restored PoW-native timestamp selection. Activation via hardfork at block height 150000.
+- Removed the artificial block spacing mechanism and restored PoW-native timestamp selection. Activation via hardfork at block height 139000.
 
 To receive security and update notifications, please subscribe to:
 
