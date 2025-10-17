@@ -9,6 +9,11 @@ Please report bugs using the issue tracker at github:
 
   <https://github.com/bitcoin/bitcoin/issues>
 
+Classic2 network changes
+========================
+
+- Removed the artificial block spacing mechanism and restored PoW-native timestamp selection. Activation via hardfork at block height 150000.
+
 To receive security and update notifications, please subscribe to:
 
   <https://bitcoincore.org/en/list/announcements/join/>

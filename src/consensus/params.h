@@ -76,6 +76,9 @@ struct Params {
     /** Minimum block spacing enforcement start height */
     int nMinBlockSpacingStartHeight;
 
+    /** Activation height for restoring PoW-native block spacing */
+    int nNoMinSpacingActivationHeight;
+
     /** Helper functions for new difficulty system */
     int64_t AveragingWindowTimespan() const {
         if (nPowAveragingWindow <= 0 || nPostBlossomPowTargetSpacing <= 0) return 1;

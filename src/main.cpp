@@ -2360,11 +2360,13 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     int64_t nTime1 = GetTimeMicros(); nTimeCheck += nTime1 - nTimeStart;
     LogPrint("bench", "    - Sanity checks: %.2fms [%.2fs]\n", 0.001 * (nTime1 - nTimeStart), nTimeCheck * 0.000001);
 
-    // Check against hash surge and fast blocks (enforce after certain height)
+    // Check against hash surge and fast blocks (enforce before activation height)
     int64_t nMinSpacing = 480; // 8 minutes - matches miner.cpp
+    bool fSpacingEnforced = pindex && pindex->pprev &&
+                            pindex->nHeight >= chainparams.GetConsensus().nMinBlockSpacingStartHeight &&
+                            pindex->nHeight < chainparams.GetConsensus().nNoMinSpacingActivationHeight;
 
-    if (nMinSpacing > 0 && pindex && pindex->pprev && 
-        pindex->nHeight >= chainparams.GetConsensus().nMinBlockSpacingStartHeight &&
+    if (nMinSpacing > 0 && fSpacingEnforced &&
         block.GetBlockTime() - pindex->pprev->GetBlockTime() < nMinSpacing) {
         
         LogPrintf("Rejected fast block at height %d (timeDiff=%d sec, required=%d sec)\n",
