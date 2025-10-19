@@ -93,6 +93,10 @@ public:
         consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing 
         consensus.nMinBlockSpacingStartHeight = 126800; //surge control start block
         consensus.nNoMinSpacingActivationHeight = 139000; // PoW-native timing reactivation
+        consensus.nAuxpowStartHeight = 143000;
+        consensus.nAuxpowChainId = 0x0005;
+        consensus.fStrictChainId = false;
+        consensus.nLegacyBlocksBeforeAuxpow = -1;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
@@ -224,6 +228,10 @@ public:
         consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
         consensus.nMinBlockSpacingStartHeight = 4; //set
         consensus.nNoMinSpacingActivationHeight = 139000;
+        consensus.nAuxpowStartHeight = 143000;
+        consensus.nAuxpowChainId = 0x0005;
+        consensus.fStrictChainId = false;
+        consensus.nLegacyBlocksBeforeAuxpow = -1;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
@@ -317,6 +325,10 @@ public:
         consensus.nMinerConfirmationWindow = 144; // Faster than normal for regtest (144 instead of 2016)
         consensus.nMinBlockSpacingStartHeight = 0;
         consensus.nNoMinSpacingActivationHeight = 0;
+        consensus.nAuxpowStartHeight = 0;
+        consensus.nAuxpowChainId = 0x0005;
+        consensus.fStrictChainId = false;
+        consensus.nLegacyBlocksBeforeAuxpow = -1;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 0;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 999999999999ULL;

@@ -255,6 +255,7 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
 
     const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
     const bool fNoSpacingActive = (nHeight >= chainparams.GetConsensus().nNoMinSpacingActivationHeight);
+    const bool fAuxpowActive = (nHeight >= chainparams.GetConsensus().nAuxpowStartHeight);
     // After activation, revert to Bitcoin-style timestamp selection driven solely by PoW consensus rules
 
     int64_t nCurrentTime = GetAdjustedTime();
@@ -324,6 +325,15 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
     
     pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
     pblock->nNonce = 0;
+
+    if (fAuxpowActive) {
+        pblock->SetAuxpowVersion(true);
+        const CPureBlockHeader& parentHeader = CAuxPow::initAuxPow(*pblock);
+        pblocktemplate->auxMiningHeader = parentHeader;
+    } else {
+        pblock->SetAuxpowVersion(false);
+        pblock->auxpow.reset();
+    }
     pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(pblock->vtx[0]);
 
     CValidationState state;

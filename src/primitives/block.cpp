@@ -4,6 +4,9 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "primitives/block.h"
+#include "primitives/pureheader.h"
+
+#include "auxpow.h"
 
 #include "hash.h"
 #include "tinyformat.h"
@@ -13,6 +16,18 @@
 uint256 CBlockHeader::GetHash() const
 {
     return SerializeHash(*this);
+}
+
+void CBlockHeader::SetAuxpow(std::unique_ptr<CAuxPow> apow)
+{
+    if (!apow) {
+        SetAuxpowVersion(false);
+        auxpow.reset();
+        return;
+    }
+
+    SetAuxpowVersion(true);
+    auxpow = std::shared_ptr<CAuxPow>(std::move(apow));
 }
 
 std::string CBlock::ToString() const

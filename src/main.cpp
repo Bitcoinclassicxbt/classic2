@@ -1703,7 +1703,7 @@ bool ReadBlockFromDisk(CBlock& block, const CDiskBlockPos& pos, const Consensus:
     }
 
     // Check the header
-    if (!CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
+    if (!CheckProofOfWork(block, consensusParams))
         return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
 
     return true;
@@ -3414,7 +3414,7 @@ bool FindUndoPos(CValidationState &state, int nFile, CDiskBlockPos &pos, unsigne
 bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW)
 {
     // Check proof of work matches claimed amount
-    if (fCheckPOW && !CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
+    if (fCheckPOW && !CheckProofOfWork(block, consensusParams))
         return state.DoS(50, false, REJECT_INVALID, "high-hash", false, "proof of work failed");
 
     return true;
@@ -3557,6 +3557,40 @@ std::vector<unsigned char> GenerateCoinbaseCommitment(CBlock& block, const CBloc
 
 bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& state, const Consensus::Params& consensusParams, CBlockIndex * const pindexPrev, int64_t nAdjustedTime)
 {
+    const int nHeight = pindexPrev ? pindexPrev->nHeight + 1 : 0;
+
+    const bool signalsAuxpow = block.IsAuxpow();
+    const bool hasAuxpowPayload = static_cast<bool>(block.auxpow);
+    const bool chainMatches = (block.GetChainId() == consensusParams.nAuxpowChainId);
+
+    if (signalsAuxpow && !chainMatches) {
+        return state.Invalid(false, REJECT_INVALID, "bad-auxpow-chainid", "auxpow signalled for wrong chain id");
+    }
+
+    if (nHeight < consensusParams.nAuxpowStartHeight) {
+        if ((signalsAuxpow && chainMatches) || hasAuxpowPayload) {
+            return state.Invalid(false, REJECT_INVALID, "bad-auxpow-premature", "auxpow not active");
+        }
+    } else {
+        if (hasAuxpowPayload && !signalsAuxpow) {
+            return state.Invalid(false, REJECT_INVALID, "bad-auxpow-flag", "auxpow payload present without flag");
+        }
+
+        if (signalsAuxpow && !hasAuxpowPayload) {
+            return state.Invalid(false, REJECT_INVALID, "bad-auxpow-missing", "auxpow payload missing");
+        }
+
+        if (!signalsAuxpow) {
+            const int legacyAllowance = consensusParams.nLegacyBlocksBeforeAuxpow;
+            if (legacyAllowance >= 0) {
+                const int legacyLimitHeight = consensusParams.nAuxpowStartHeight + legacyAllowance;
+                if (nHeight > legacyLimitHeight) {
+                    return state.Invalid(false, REJECT_INVALID, "bad-auxpow-legacy", "legacy block after auxpow grace period");
+                }
+            }
+        }
+    }
+
     if (pindexPrev && pindexPrev->nHeight < 112400) {
         //LogPrintf("Skipping difficulty check for block %d, below block 97000\n", pindexPrev->nHeight);
         return true;  // Allow block even if proof of work is incorrect for blocks before 97000
