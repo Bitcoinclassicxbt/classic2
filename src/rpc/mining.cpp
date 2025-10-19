@@ -16,6 +16,7 @@
 #include "miner.h"
 #include "net.h"
 #include "pow.h"
+#include "rpc/auxpow_miner.h"
 #include "rpc/server.h"
 #include "txmempool.h"
 #include "util.h"
@@ -911,6 +912,66 @@ UniValue estimatesmartpriority(const UniValue& params, bool fHelp)
     return result;
 }
 
+UniValue createauxblock(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "createauxblock address\n"
+            "\nCreates a new block and returns merge-mining information.\n"
+            "\nArguments:\n"
+            "1. address    (string, required) Payout address for the coinbase transaction\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"hash\": \"hex\",                (string) hash of the created block\n"
+            "  \"chainid\": n,                 (numeric) chain ID for this block\n"
+            "  \"previousblockhash\": \"hex\",  (string) hash of the previous block\n"
+            "  \"coinbasevalue\": n,           (numeric) value of the block's coinbase\n"
+            "  \"bits\": \"hex\",               (string) compressed target of the block\n"
+            "  \"height\": n,                 (numeric) height of the block\n"
+            "  \"_target\": \"hex\"             (string) target in reversed byte order (deprecated)\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("createauxblock", "\"address\"")
+            + HelpExampleRpc("createauxblock", "\"address\"")
+        );
+
+    CheckAuxMiningAllowed();
+
+    CBitcoinAddress address(params[0].get_str());
+    if (!address.IsValid())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
+
+    const CTxDestination dest = address.Get();
+    const CScript scriptPubKey = GetScriptForDestination(dest);
+
+    return AuxpowMiner::get().createAuxBlock(scriptPubKey);
+}
+
+UniValue submitauxblock(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 2)
+        throw runtime_error(
+            "submitauxblock hash auxpow\n"
+            "\nSubmits a solved auxpow for a block created by createauxblock.\n"
+            "\nArguments:\n"
+            "1. hash     (string, required) Hash of the block to submit\n"
+            "2. auxpow   (string, required) Serialized auxpow in hex\n"
+            "\nResult:\n"
+            "true|false  (boolean) whether the submitted block was accepted\n"
+            "\nExamples:\n"
+            + HelpExampleCli("submitauxblock", "\"hash\" \"serialised auxpow\"")
+            + HelpExampleRpc("submitauxblock", "\"hash\" \"serialised auxpow\"")
+        );
+
+    CheckAuxMiningAllowed();
+
+    const std::string hashHex = params[0].get_str();
+    const std::string auxpowHex = params[1].get_str();
+
+    const bool accepted = AuxpowMiner::get().submitAuxBlock(hashHex, auxpowHex);
+    return UniValue(accepted);
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
@@ -919,6 +980,8 @@ static const CRPCCommand commands[] =
     { "mining",             "prioritisetransaction",  &prioritisetransaction,  true  },
     { "mining",             "getblocktemplate",       &getblocktemplate,       true  },
     { "mining",             "submitblock",            &submitblock,            true  },
+    { "mining",             "createauxblock",         &createauxblock,         true  },
+    { "mining",             "submitauxblock",         &submitauxblock,         true  },
 
     { "generating",         "generate",               &generate,               true  },
     { "generating",         "generatetoaddress",      &generatetoaddress,      true  },

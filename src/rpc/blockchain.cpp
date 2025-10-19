@@ -9,6 +9,9 @@
 #include "checkpoints.h"
 #include "coins.h"
 #include "consensus/validation.h"
+#include "core_io.h"
+#include "primitives/block.h"
+#include "hash.h"
 #include "main.h"
 #include "policy/policy.h"
 #include "primitives/transaction.h"
@@ -18,7 +21,7 @@
 #include "txmempool.h"
 #include "util.h"
 #include "utilstrencodings.h"
-#include "hash.h"
+#include "auxpow.h"
 
 #include <stdint.h>
 
@@ -30,6 +33,56 @@ using namespace std;
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fIncludeHex);
+
+static UniValue AuxpowToJSON(const CAuxPow& auxpow)
+{
+    UniValue result(UniValue::VOBJ);
+
+    UniValue coinbase(UniValue::VOBJ);
+    coinbase.pushKV("hash", auxpow.getCoinbaseTransaction().GetHash().GetHex());
+    coinbase.pushKV("hex", EncodeHexTx(auxpow.getCoinbaseTransaction()));
+    result.pushKV("coinbase", coinbase);
+
+    result.pushKV("chainindex", auxpow.getChainIndex());
+
+    UniValue branch(UniValue::VARR);
+    for (const uint256& node : auxpow.getMerkleBranch()) {
+        branch.push_back(node.GetHex());
+    }
+    result.pushKV("merklebranch", branch);
+
+    UniValue chainBranch(UniValue::VARR);
+    for (const uint256& node : auxpow.getChainMerkleBranch()) {
+        chainBranch.push_back(node.GetHex());
+    }
+    result.pushKV("chainmerklebranch", chainBranch);
+
+    const CPureBlockHeader& parent = auxpow.getParentBlock();
+    result.pushKV("parenthash", parent.GetHash().GetHex());
+
+    CDataStream ssParent(SER_NETWORK, PROTOCOL_VERSION);
+    ssParent << parent;
+    result.pushKV("parentblock", HexStr(ssParent));
+
+    return result;
+}
+
+static UniValue AuxMiningInfoToJSON()
+{
+    UniValue obj(UniValue::VOBJ);
+    const Consensus::Params& params = Params().GetConsensus();
+
+    obj.pushKV("startheight", params.nAuxpowStartHeight);
+    obj.pushKV("chainid", params.nAuxpowChainId);
+    obj.pushKV("strict", params.fStrictChainId);
+
+    CBlockIndex* tip = chainActive.Tip();
+    if (tip) {
+        obj.pushKV("height", tip->nHeight);
+    }
+
+    return obj;
+}
 
 double GetDifficulty(const CBlockIndex* blockindex)
 {
@@ -60,6 +113,96 @@ double GetDifficulty(const CBlockIndex* blockindex)
     }
 
     return dDiff;
+}
+
+UniValue getauxpowinfo(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getauxpowinfo\n"
+            "\nReturns merge-mining (AuxPoW) activation parameters and recent status.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"startheight\": n,            (numeric) Height at which AuxPoW activates\n"
+            "  \"chainid\": n,               (numeric) Expected chain ID signalled in headers\n"
+            "  \"strictchainid\": true|false (boolean) Whether mismatching chain IDs are rejected\n"
+            "  \"legacyblocks\": n,          (numeric) Number of legacy blocks allowed after activation (-1 unlimited)\n"
+            "  \"currentheight\": n,         (numeric) Best chain height\n"
+            "  \"activated\": true|false     (boolean) Whether AuxPoW rules are currently enforced\n"
+            "  \"tip\": { ... },             (object) Tip block status, including AuxPoW data when present\n"
+            "  \"recent_auxpow_blocks\": [ ... ] (array) Up to five recent AuxPoW blocks with details\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getauxpowinfo", "")
+            + HelpExampleRpc("getauxpowinfo", ""));
+
+    LOCK(cs_main);
+
+    const Consensus::Params& consensus = Params().GetConsensus();
+    UniValue result(UniValue::VOBJ);
+
+    result.pushKV("startheight", consensus.nAuxpowStartHeight);
+    result.pushKV("chainid", consensus.nAuxpowChainId);
+    result.pushKV("strictchainid", consensus.fStrictChainId);
+    result.pushKV("legacyblocks", consensus.nLegacyBlocksBeforeAuxpow);
+
+    const CBlockIndex* tipIndex = chainActive.Tip();
+    const int currentHeight = tipIndex ? tipIndex->nHeight : -1;
+    result.pushKV("currentheight", currentHeight);
+    result.pushKV("activated", currentHeight >= 0 && currentHeight + 1 >= consensus.nAuxpowStartHeight);
+
+    UniValue tip(UniValue::VOBJ);
+    if (tipIndex) {
+        tip.pushKV("height", tipIndex->nHeight);
+        tip.pushKV("hash", tipIndex->GetBlockHash().GetHex());
+        tip.pushKV("version", tipIndex->nVersion);
+
+        CBlock tipBlock;
+        if (ReadBlockFromDisk(tipBlock, tipIndex, consensus)) {
+            const bool fAuxpow = tipBlock.IsAuxpow();
+            tip.pushKV("is_auxpow", fAuxpow);
+            if (fAuxpow && tipBlock.auxpow) {
+                tip.pushKV("auxpow", AuxpowToJSON(*tipBlock.auxpow));
+            }
+        } else {
+            tip.pushKV("error", "failed to read tip block");
+        }
+    }
+    result.pushKV("tip", tip);
+
+    UniValue recent(UniValue::VARR);
+    const int maxEntries = 5;
+    const CBlockIndex* cursor = tipIndex;
+    int collected = 0;
+    while (cursor && collected < maxEntries) {
+        if (cursor->nHeight < consensus.nAuxpowStartHeight) {
+            cursor = cursor->pprev;
+            continue;
+        }
+
+        CBlock block;
+        if (!ReadBlockFromDisk(block, cursor, consensus)) {
+            cursor = cursor->pprev;
+            continue;
+        }
+
+        if (!block.IsAuxpow() || !block.auxpow) {
+            cursor = cursor->pprev;
+            continue;
+        }
+
+        UniValue entry(UniValue::VOBJ);
+        entry.pushKV("height", cursor->nHeight);
+        entry.pushKV("hash", cursor->GetBlockHash().GetHex());
+        entry.pushKV("auxpow", AuxpowToJSON(*block.auxpow));
+        recent.push_back(entry);
+        ++collected;
+
+        cursor = cursor->pprev;
+    }
+    result.pushKV("recent_auxpow_blocks", recent);
+
+    return result;
 }
 
 UniValue blockheaderToJSON(const CBlockIndex* blockindex)
@@ -1204,6 +1347,7 @@ static const CRPCCommand commands[] =
     { "blockchain",         "getrawmempool",          &getrawmempool,          true  },
     { "blockchain",         "gettxout",               &gettxout,               true  },
     { "blockchain",         "gettxoutsetinfo",        &gettxoutsetinfo,        true  },
+    { "blockchain",         "getauxpowinfo",          &getauxpowinfo,          true  },
     { "blockchain",         "verifychain",            &verifychain,            true  },
 
     /* Not shown in help */

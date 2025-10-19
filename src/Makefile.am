@@ -173,6 +173,7 @@ libbitcoin_server_a_SOURCES = \
   chain.cpp \
   chainstability.cpp \
   checkpoints.cpp \
+  auxpow.cpp \
   httprpc.cpp \
   httpserver.cpp \
   init.cpp \
@@ -185,8 +186,10 @@ libbitcoin_server_a_SOURCES = \
   policy/fees.cpp \
   policy/policy.cpp \
   pow.cpp \
+  primitives/pureheader.cpp \
   rest.cpp \
   rpc/blockchain.cpp \
+  rpc/auxpow_miner.cpp \
   rpc/mining.cpp \
   rpc/misc.cpp \
   rpc/net.cpp \

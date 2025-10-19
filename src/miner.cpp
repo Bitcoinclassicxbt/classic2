@@ -253,27 +253,41 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
     if (chainparams.MineBlocksOnDemand())
         pblock->nVersion = GetArg("-blockversion", pblock->nVersion);
 
-    // Calculate timing constraints upfront
     const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
-    const int64_t nCurrentTime = GetAdjustedTime();
-    const int64_t nMaxFutureTime = nCurrentTime + 7200; // MAX_FUTURE_BLOCK_TIME
-    
-    // Minimum spacing check
-    int64_t nMinSpacing = std::max(GetArg("-minblockspacing", 480), static_cast<int64_t>(480));
-    int64_t nMinAllowedTime = std::max(
-        nMedianTimePast + 1,  // Consensus requirement
-        pindexPrev->GetBlockTime() + nMinSpacing  // Minimum spacing
-    );
-    
-    // Check if we can create a valid block now
-    if (nMinAllowedTime > nMaxFutureTime) {
-        LogPrintf("CreateNewBlock(): Cannot create valid block template - minimum time %d exceeds max future time %d\n", 
-                  nMinAllowedTime, nMaxFutureTime);
-        return NULL;  // Return NULL instead of invalid template
+    const bool fNoSpacingActive = (nHeight >= chainparams.GetConsensus().nNoMinSpacingActivationHeight);
+    const bool fAuxpowActive = (nHeight >= chainparams.GetConsensus().nAuxpowStartHeight);
+    // After activation, revert to Bitcoin-style timestamp selection driven solely by PoW consensus rules
+
+    int64_t nCurrentTime = GetAdjustedTime();
+    if (fNoSpacingActive) {
+        pblock->nTime = static_cast<uint32_t>(std::max(nMedianTimePast + 1, nCurrentTime));
+    } else {
+        pblock->nTime = static_cast<uint32_t>(nCurrentTime);
+
+        int64_t nMinSpacing = std::max(GetArg("-minblockspacing", 480), static_cast<int64_t>(480));
+        if (nMinSpacing > 0) {
+            int64_t nMinTime = pindexPrev->GetBlockTime() + nMinSpacing;
+            int64_t nMaxTime = GetAdjustedTime() + 7200; // MAX_FUTURE_BLOCK_TIME = 7200 seconds
+
+            if (pblock->nTime < nMinTime) {
+                if (nMinTime <= nMaxTime) {
+                    LogPrintf("Mining: Enforcing minimum block spacing (waiting %d seconds)\n",
+                              nMinTime - pblock->nTime);
+                    pblock->nTime = nMinTime;
+                } else {
+                    LogPrintf("Mining: Minimum spacing would create invalid future timestamp, using max allowed time\n");
+                    pblock->nTime = nMaxTime;
+                }
+            }
+        }
+
+        pblock->nTime = std::max(static_cast<uint32_t>(pblock->nTime), static_cast<uint32_t>(nMedianTimePast + 1));
+
+        int64_t nFinalMaxTime = GetAdjustedTime() + 7200;
+        if (pblock->nTime > nFinalMaxTime) {
+            pblock->nTime = nFinalMaxTime;
+        }
     }
-    
-    // Set initial time - will be adjusted by UpdateTime
-    pblock->nTime = nCurrentTime;
     
     nLockTimeCutoff = (STANDARD_LOCKTIME_VERIFY_FLAGS & LOCKTIME_MEDIAN_TIME_PAST)
                        ? nMedianTimePast
@@ -309,19 +323,17 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
     pblock->hashPrevBlock = pindexPrev->GetBlockHash();
     UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
     
-    // Apply final timestamp constraints
-    pblock->nTime = std::max(static_cast<uint32_t>(pblock->nTime), static_cast<uint32_t>(nMinAllowedTime));
-    pblock->nTime = std::min(static_cast<uint32_t>(pblock->nTime), static_cast<uint32_t>(nMaxFutureTime));
-    
-    // Log timing information for debugging
-    int64_t nActualSpacing = pblock->nTime - pindexPrev->GetBlockTime();
-    if (nActualSpacing < nMinSpacing) {
-        LogPrintf("CreateNewBlock(): Warning - block spacing %d seconds is less than minimum %d seconds\n", 
-                  nActualSpacing, nMinSpacing);
-    }
-    
     pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
     pblock->nNonce = 0;
+
+    if (fAuxpowActive) {
+        pblock->SetAuxpowVersion(true);
+        const CPureBlockHeader& parentHeader = CAuxPow::initAuxPow(*pblock);
+        pblocktemplate->auxMiningHeader = parentHeader;
+    } else {
+        pblock->SetAuxpowVersion(false);
+        pblock->auxpow.reset();
+    }
     pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(pblock->vtx[0]);
 
     CValidationState state;
