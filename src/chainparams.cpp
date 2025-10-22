@@ -92,8 +92,8 @@ public:
         consensus.nPostBlossomPowTargetSpacing = 10 * 60; // Keep 10 minute blocks
         consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing 
         consensus.nMinBlockSpacingStartHeight = 126800; //surge control start block
-        consensus.nNoMinSpacingActivationHeight = 139000; // PoW-native timing reactivation
-        consensus.nAuxpowStartHeight = 143000;
+        consensus.nNoMinSpacingActivationHeight = 136150; // 
+        consensus.nAuxpowStartHeight = 136900;
         consensus.nAuxpowChainId = 0x0005;
         consensus.fStrictChainId = false;
         consensus.nLegacyBlocksBeforeAuxpow = -1;
@@ -176,7 +176,7 @@ public:
             ( 97000, uint256S("0x00000000000125d656e9f28543317f33fb1b66baaf90de44a375ce6c5564fe0c"))
             ( 110000, uint256S("0x0000000000000004c6282de33556f2e8658f5c70c9c845f95f8ff8ebd6005184"))
             ( 112273, uint256S("0x00000000b729f5512fcb0aabf09531d585b5f261af00e3a871f139346933349a"))
-            ( 112333, uint256S("0x00000000b729f5512fcb0aabf09531d585b5f261af00e3a871f139346933349a")) //from here
+            ( 112333, uint256S("0x0000000000000004cc1d6259c38c2e05c0445b2b30a316355d5f3c190c18b4f9"))
             ( 113283, uint256S("0x0000000000000006907ed7a8d9f4294df122f621439adf0c0f2af4edf67e0197"))
             ( 114533, uint256S("0x00000000000000055eb4407dadd1a3f71b3b1e7160f458a0dcabecdcd81f4c8b"))
             ( 115633, uint256S("0x000000000000001d746fde2db4056d48864f82e19bfc809ba47c6bde2e96bde9")) 
@@ -227,7 +227,7 @@ public:
         consensus.nRuleChangeActivationThreshold = 1512; // 75% for testchains
         consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
         consensus.nMinBlockSpacingStartHeight = 4; //set
-        consensus.nNoMinSpacingActivationHeight = 139000;
+        consensus.nNoMinSpacingActivationHeight = 0; // Testnet: disable spacing immediately
         consensus.nAuxpowStartHeight = 143000;
         consensus.nAuxpowChainId = 0x0005;
         consensus.fStrictChainId = false;

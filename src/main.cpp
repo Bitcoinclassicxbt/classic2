@@ -3563,15 +3563,16 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     const bool hasAuxpowPayload = static_cast<bool>(block.auxpow);
     const bool chainMatches = (block.GetChainId() == consensusParams.nAuxpowChainId);
 
-    if (signalsAuxpow && !chainMatches) {
-        return state.Invalid(false, REJECT_INVALID, "bad-auxpow-chainid", "auxpow signalled for wrong chain id");
-    }
-
     if (nHeight < consensusParams.nAuxpowStartHeight) {
         if ((signalsAuxpow && chainMatches) || hasAuxpowPayload) {
             return state.Invalid(false, REJECT_INVALID, "bad-auxpow-premature", "auxpow not active");
         }
     } else {
+        // After activation, enforce chain ID for auxpow blocks
+        if (signalsAuxpow && !chainMatches) {
+            return state.Invalid(false, REJECT_INVALID, "bad-auxpow-chainid", "auxpow signalled for wrong chain id");
+        }
+
         if (hasAuxpowPayload && !signalsAuxpow) {
             return state.Invalid(false, REJECT_INVALID, "bad-auxpow-flag", "auxpow payload present without flag");
         }

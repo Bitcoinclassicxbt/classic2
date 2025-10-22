@@ -321,7 +321,12 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
 
     // Fill in header
     pblock->hashPrevBlock = pindexPrev->GetBlockHash();
-    UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
+    
+    // Only call UpdateTime when spacing is not enforced
+    // When spacing is enforced, we've already set the correct timestamp above
+    if (fNoSpacingActive) {
+        UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
+    }
     
     pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
     pblock->nNonce = 0;
