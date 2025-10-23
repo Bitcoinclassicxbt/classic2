@@ -92,8 +92,8 @@ public:
         consensus.nPostBlossomPowTargetSpacing = 10 * 60; // Keep 10 minute blocks
         consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing 
         consensus.nMinBlockSpacingStartHeight = 126800; //surge control start block
-        consensus.nNoMinSpacingActivationHeight = 136150; // 
-        consensus.nAuxpowStartHeight = 136900;
+        consensus.nNoMinSpacingActivationHeight = 136500; // 
+        consensus.nAuxpowStartHeight = 137000;
         consensus.nAuxpowChainId = 0x0005;
         consensus.fStrictChainId = false;
         consensus.nLegacyBlocksBeforeAuxpow = -1;
