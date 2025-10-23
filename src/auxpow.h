@@ -22,6 +22,11 @@ class CBlockIndex;
 class CValidationState;
 class UniValue;
 
+// Forward declaration for test friend class
+namespace auxpow_tests {
+    class CAuxPowForTest;
+}
+
 /** Header identifying merge-mining data inside coinbase scripts. */
 static const unsigned char pchMergedMiningHeader[] = {0xfa, 0xbe, 'm', 'm'};
 
@@ -32,6 +37,9 @@ static const unsigned char pchMergedMiningHeader[] = {0xfa, 0xbe, 'm', 'm'};
  */
 class CAuxPow
 {
+    // Friend declaration for test helper class (in auxpow_tests namespace)
+    friend class auxpow_tests::CAuxPowForTest;
+
 private:
     CTransaction coinbaseTx;
     std::vector<uint256> vMerkleBranch;
@@ -95,10 +103,13 @@ public:
    */
   static CPureBlockHeader& initAuxPow (CBlockHeader& header);
 
-  const CTransaction& getCoinbaseTransaction() const { return coinbaseTx; }
-  const std::vector<uint256>& getMerkleBranch() const { return vMerkleBranch; }
-  const std::vector<uint256>& getChainMerkleBranch() const { return vChainMerkleBranch; }
-  int getChainIndex() const { return nChainIndex; }
+    /**
+     * Accessors for testing and RPC.
+     */
+    const CTransaction& getCoinbaseTransaction() const { return coinbaseTx; }
+    const std::vector<uint256>& getMerkleBranch() const { return vMerkleBranch; }
+    const std::vector<uint256>& getChainMerkleBranch() const { return vChainMerkleBranch; }
+    int getChainIndex() const { return nChainIndex; }
 };
 
 #endif // CLASSIC2_AUXPOW_H
