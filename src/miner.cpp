@@ -332,6 +332,8 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
     pblock->nNonce = 0;
 
     if (fAuxpowActive) {
+        // Set the chain ID for AuxPoW blocks
+        pblock->SetChainId(chainparams.GetConsensus().nAuxpowChainId);
         pblock->SetAuxpowVersion(true);
         const CPureBlockHeader& parentHeader = CAuxPow::initAuxPow(*pblock);
         pblocktemplate->auxMiningHeader = parentHeader;

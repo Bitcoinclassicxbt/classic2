@@ -133,6 +133,8 @@ std::unique_ptr<CAuxPow> CAuxPow::createAuxPow(const CPureBlockHeader& header)
 
     CBlock parent;
     parent.nVersion = 1;
+    // Parent block should have chain ID 0 (different from the merge-mined chain)
+    parent.SetChainId(0);
     parent.vtx.resize(1);
     parent.vtx[0] = coinbase;
     parent.hashMerkleRoot = BlockMerkleRoot(parent);
