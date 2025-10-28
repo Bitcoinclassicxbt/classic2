@@ -3620,11 +3620,10 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     if (block.GetBlockTime() <= pindexPrev->GetMedianTimePast())
         return state.Invalid(false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
 
-    // Check timestamp against prev
-    if (block.GetBlockTime() <= pindexPrev->GetMedianTimePast())
-        return state.Invalid(false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
-
-    // Check timestamp
+    // Check timestamp - use standard 2-hour future timestamp window
+    // Note: After block 136500 (spacing removal), the network experienced mixed old/new miner blocks
+    // causing some backward timestamps (blocks 136775, 136785, etc). These are already in the chain
+    // and must be accepted during sync. We only enforce future timestamp limits.
     if (block.GetBlockTime() > nAdjustedTime + 2 * 60 * 60)
         return state.Invalid(false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
 
@@ -5991,8 +5990,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
         headers.resize(nCount);
         for (unsigned int n = 0; n < nCount; n++) {
-            vRecv >> headers[n];
-            ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
+            try {
+                vRecv >> headers[n];
+                ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
+            } catch (const std::ios_base::failure& e) {
+                // Handle truncated or malformed headers messages
+                // This can happen with peers running old software or network corruption
+                LogPrint("net", "headers message deserialization failed at header %u/%u: %s\n",
+                        n, nCount, e.what());
+                // Resize to only include successfully deserialized headers
+                headers.resize(n);
+                break;
+            }
         }
 
         {
