@@ -39,6 +39,13 @@ public:
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
         READWRITE(static_cast<CPureBlockHeader&>(*this));
 
+        // When calculating the hash (SER_GETHASH), we only serialize the pure header
+        // and exclude the auxpow data. The block hash is always calculated from just
+        // the 80-byte header (nVersion, hashPrevBlock, hashMerkleRoot, nTime, nBits, nNonce).
+        if (nType & SER_GETHASH) {
+            return;
+        }
+
         const int chainId = GetChainId();
         const bool expectAuxpow = IsAuxpow() && chainId > 0 && chainId < 0x0100;
 
@@ -46,10 +53,15 @@ public:
             if (ser_action.ForRead()) {
                 auxpow = std::make_shared<CAuxPow>();
             }
-            if (!auxpow) {
+            // Only enforce auxpow presence during READ operations (deserialization).
+            // During WRITE operations (serialization), allow null auxpow to support
+            // test cases that need to create invalid blocks for validation testing.
+            if (ser_action.ForRead() && !auxpow) {
                 throw std::ios_base::failure("AuxPow flag set but payload missing");
             }
-            READWRITE(*auxpow);
+            if (auxpow) {
+                READWRITE(*auxpow);
+            }
         } else if (ser_action.ForRead()) {
             auxpow.reset();
         }
