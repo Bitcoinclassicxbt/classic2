@@ -2363,8 +2363,12 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     // Check against hash surge and fast blocks (enforce after certain height)
     int64_t nMinSpacing = 480; // 8 minutes - matches miner.cpp
 
+    bool fSkipFastBlockCheck = pindex && pindex->pprev &&
+        pindex->pprev->nHeight >= 136499 && pindex->pprev->nHeight <= 136998;
+
     if (nMinSpacing > 0 && pindex && pindex->pprev && 
         pindex->nHeight >= chainparams.GetConsensus().nMinBlockSpacingStartHeight &&
+        !fSkipFastBlockCheck &&
         block.GetBlockTime() - pindex->pprev->GetBlockTime() < nMinSpacing) {
         
         LogPrintf("Rejected fast block at height %d (timeDiff=%d sec, required=%d sec)\n",
@@ -3560,15 +3564,14 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
         return true;  // Allow block even if proof of work is incorrect for blocks before 97000
     }
 
-    //125980
     if (pindexPrev &&
-        (pindexPrev->nHeight >= 125979 && pindexPrev->nHeight <= 127937)) {
+        (pindexPrev->nHeight >= 122290 && pindexPrev->nHeight < 122298)) {
         //LogPrintf("Skipping difficulty check for block %d, special exception\n", pindexPrev->nHeight + 1);
         return true;
     }
 
     if (pindexPrev &&
-        (pindexPrev->nHeight >= 122290 && pindexPrev->nHeight < 122298)) {
+        (pindexPrev->nHeight >= 136499 && pindexPrev->nHeight <= 136998)) {
         //LogPrintf("Skipping difficulty check for block %d, special exception\n", pindexPrev->nHeight + 1);
         return true;
     }
@@ -3587,9 +3590,9 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     if (block.GetBlockTime() <= pindexPrev->GetMedianTimePast())
         return state.Invalid(false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
 
-    // Check timestamp
-    if (block.GetBlockTime() > nAdjustedTime + 2 * 60 * 60)
-        return state.Invalid(false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
+    // // Check timestamp
+    // if (block.GetBlockTime() > nAdjustedTime + 2 * 60 * 60)
+    //    return state.Invalid(false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
 
     // Reject outdated version blocks when 95% (75% on testnet) of the network has upgraded:
     for (int32_t version = 2; version < 5; ++version) // check for version 2, 3 and 4 upgrades

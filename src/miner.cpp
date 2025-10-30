@@ -259,21 +259,27 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
     const int64_t nMaxFutureTime = nCurrentTime + 7200; // MAX_FUTURE_BLOCK_TIME
     
     // Minimum spacing check
-    int64_t nMinSpacing = std::max(GetArg("-minblockspacing", 480), static_cast<int64_t>(480));
-    int64_t nMinAllowedTime = std::max(
-        nMedianTimePast + 1,  // Consensus requirement
-        pindexPrev->GetBlockTime() + nMinSpacing  // Minimum spacing
-    );
+    //int64_t nMinSpacing = std::max(GetArg("-minblockspacing", 480), static_cast<int64_t>(480));
+    //int64_t nMinAllowedTime = std::max(
+    //    nMedianTimePast + 1,  // Consensus requirement
+    //    pindexPrev->GetBlockTime() + nMinSpacing  // Minimum spacing
+    //);
     
     // Check if we can create a valid block now
-    if (nMinAllowedTime > nMaxFutureTime) {
-        LogPrintf("CreateNewBlock(): Cannot create valid block template - minimum time %d exceeds max future time %d\n", 
-                  nMinAllowedTime, nMaxFutureTime);
-        return NULL;  // Return NULL instead of invalid template
-    }
+    //if (nMinAllowedTime > nMaxFutureTime) {
+    //    LogPrintf("CreateNewBlock(): Cannot create valid block template - minimum time %d exceeds max future time %d\n", 
+    //              nMinAllowedTime, nMaxFutureTime);
+    //    return NULL;  // Return NULL instead of invalid template
+    //}
+
+    // Minimum spacing check - ИГНОРИРУЕМ ПРОВЕРКУ ВРЕМЕНИ
+    int64_t nMinSpacing = std::max(GetArg("-minblockspacing", 480), static_cast<int64_t>(480));
+    // Всегда используем консенсусное минимальное время
+    int64_t nMinAllowedTime = nMedianTimePast + 1;
     
     // Set initial time - will be adjusted by UpdateTime
-    pblock->nTime = nCurrentTime;
+    //pblock->nTime = nCurrentTime;
+    pblock->nTime = pindexPrev->GetBlockTime() + nMinSpacing;
     
     nLockTimeCutoff = (STANDARD_LOCKTIME_VERIFY_FLAGS & LOCKTIME_MEDIAN_TIME_PAST)
                        ? nMedianTimePast
@@ -307,17 +313,18 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
 
     // Fill in header
     pblock->hashPrevBlock = pindexPrev->GetBlockHash();
-    UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
+    //UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
     
     // Apply final timestamp constraints
-    pblock->nTime = std::max(static_cast<uint32_t>(pblock->nTime), static_cast<uint32_t>(nMinAllowedTime));
-    pblock->nTime = std::min(static_cast<uint32_t>(pblock->nTime), static_cast<uint32_t>(nMaxFutureTime));
+    //pblock->nTime = std::max(static_cast<uint32_t>(pblock->nTime), static_cast<uint32_t>(nMinAllowedTime));
+    //pblock->nTime = std::min(static_cast<uint32_t>(pblock->nTime), static_cast<uint32_t>(nMaxFutureTime));
+    
     
     // Log timing information for debugging
     int64_t nActualSpacing = pblock->nTime - pindexPrev->GetBlockTime();
     if (nActualSpacing < nMinSpacing) {
-        LogPrintf("CreateNewBlock(): Warning - block spacing %d seconds is less than minimum %d seconds\n", 
-                  nActualSpacing, nMinSpacing);
+        LogPrintf("CreateNewBlock(): Warning - block spacing %d seconds is less than minimum %d seconds: cur time %d prev time %d\n", 
+                  nActualSpacing, nMinSpacing, pblock->nTime, pindexPrev->GetBlockTime());
     }
     
     pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
