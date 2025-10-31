@@ -272,14 +272,12 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
     //    return NULL;  // Return NULL instead of invalid template
     //}
 
-    // Minimum spacing check - ИГНОРИРУЕМ ПРОВЕРКУ ВРЕМЕНИ
+    // Minimum spacing for logging/monitoring only
     int64_t nMinSpacing = std::max(GetArg("-minblockspacing", 480), static_cast<int64_t>(480));
-    // Всегда используем консенсусное минимальное время
     int64_t nMinAllowedTime = nMedianTimePast + 1;
-    
-    // Set initial time - will be adjusted by UpdateTime
-    //pblock->nTime = nCurrentTime;
-    pblock->nTime = pindexPrev->GetBlockTime() + nMinSpacing;
+
+    // Start from current time while satisfying consensus minimum
+    pblock->nTime = std::max(nCurrentTime, nMinAllowedTime);
     
     nLockTimeCutoff = (STANDARD_LOCKTIME_VERIFY_FLAGS & LOCKTIME_MEDIAN_TIME_PAST)
                        ? nMedianTimePast
@@ -313,13 +311,12 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
 
     // Fill in header
     pblock->hashPrevBlock = pindexPrev->GetBlockHash();
-    //UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
-    
-    // Apply final timestamp constraints
-    //pblock->nTime = std::max(static_cast<uint32_t>(pblock->nTime), static_cast<uint32_t>(nMinAllowedTime));
-    //pblock->nTime = std::min(static_cast<uint32_t>(pblock->nTime), static_cast<uint32_t>(nMaxFutureTime));
-    
-    
+    // Refresh header time and clamp to future limit
+    UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
+    if (pblock->nTime > nMaxFutureTime) {
+        pblock->nTime = nMaxFutureTime;
+    }
+
     // Log timing information for debugging
     int64_t nActualSpacing = pblock->nTime - pindexPrev->GetBlockTime();
     if (nActualSpacing < nMinSpacing) {
