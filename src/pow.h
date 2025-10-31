@@ -24,6 +24,8 @@ unsigned int CalculateNextWorkRequiredNew(arith_uint256 bnAvg, int64_t nFirstBlo
 
 /** Check whether a block hash satisfies the proof-of-work requirement specified by nBits */
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&);
+/** AuxPoW-aware proof-of-work verification */
+bool CheckProofOfWork(const CBlockHeader& block, const Consensus::Params& params);
 
 /**
  * Return false if the proof-of-work requirement specified by new_nbits at a

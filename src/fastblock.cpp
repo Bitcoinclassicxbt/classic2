@@ -10,6 +10,10 @@ bool IsFastBlock(const CBlock& block, const CBlockIndex* pindexPrev, const Conse
 {
     if (!pindexPrev) return false;
 
+    int nextHeight = pindexPrev->nHeight + 1;
+    // Disable discouragement once natural PoW timing reactivates
+    if (nextHeight >= params.nNoMinSpacingActivationHeight) return false;
+
     // Use configurable minimum spacing (non-consensus)
     int64_t nMinSpacing = GetArg("-minblockspacing", 120); // Default 2 minutes
     if (nMinSpacing <= 0) return false;

@@ -6,8 +6,11 @@
 #include "pow.h"
 
 #include "arith_uint256.h"
+#include "auxpow.h"
 #include "chain.h"
+#include "hash.h"
 #include "primitives/block.h"
+#include "util.h"
 #include "uint256.h"
 
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
@@ -365,7 +368,7 @@ bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t heig
     return true;
 }
 
-bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params)
+static bool CheckProofOfWorkHash(uint256 hash, unsigned int nBits, const Consensus::Params& params)
 {
     bool fNegative;
     bool fOverflow;
@@ -380,6 +383,44 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&
     // Check proof of work matches claimed amount
     if (UintToArith256(hash) > bnTarget)
         return false;
+
+    return true;
+}
+
+bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params)
+{
+    return CheckProofOfWorkHash(hash, nBits, params);
+}
+
+bool CheckProofOfWork(const CBlockHeader& block, const Consensus::Params& params)
+{
+    /* Legacy blocks (without chain ID encoded) are permitted before AuxPoW
+       activation height, controlled in ContextualCheck logic.  */
+    const bool signalsAuxpow = block.IsAuxpow();
+    const bool chainMatches = (block.GetChainId() == params.nAuxpowChainId);
+
+    if (!signalsAuxpow || !chainMatches) {
+        if (signalsAuxpow && block.auxpow)
+            return error("%s : auxpow payload present without auxpow flag", __func__);
+
+        return CheckProofOfWorkHash(block.GetHash(), block.nBits, params);
+    }
+
+    if (!block.auxpow)
+        return error("%s : auxpow flag set but payload missing", __func__);
+
+    if (params.fStrictChainId && block.GetChainId() != params.nAuxpowChainId)
+        return error("%s : wrong chain ID in auxpow block", __func__);
+
+    const CPureBlockHeader& parent = block.auxpow->getParentBlock();
+    if (parent.IsAuxpow())
+        return error("%s : parent block must not signal auxpow", __func__);
+
+    if (!CheckProofOfWorkHash(block.auxpow->getParentBlockHash(), block.nBits, params))
+        return error("%s : parent proof of work failed", __func__);
+
+    if (!block.auxpow->check(block.GetHash(), block.GetChainId(), params))
+        return error("%s : auxpow merkle linkage invalid", __func__);
 
     return true;
 }

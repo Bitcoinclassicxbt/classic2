@@ -159,14 +159,14 @@ After building, you can create release packages:
 cd src
 
 # Create Bitcoin Classic release packages
-mkdir -p bitcoin-classic-0.13.4-linux-x86_64
-cp bitcoind bitcoin-cli bitcoin-tx qt/bitcoin-qt bitcoin-classic-0.13.4-linux-x86_64/
-tar -czf bitcoin-classic-0.13.4-linux-x86_64.tar.gz bitcoin-classic-0.13.4-linux-x86_64/
+mkdir -p bitcoin-classic-0.14.0-linux-x86_64
+cp bitcoind bitcoin-cli bitcoin-tx qt/bitcoin-qt bitcoin-classic-0.14.0-linux-x86_64/
+tar -czf bitcoin-classic-0.14.0-linux-x86_64.tar.gz bitcoin-classic-0.14.0-linux-x86_64/
 
 # For Windows (if cross-compiled)
-mkdir -p bitcoin-classic-0.13.4-windows-x86_64
-cp bitcoind.exe bitcoin-cli.exe bitcoin-tx.exe qt/bitcoin-qt.exe bitcoin-classic-0.13.4-windows-x86_64/
-zip -r bitcoin-classic-0.13.4-windows-x86_64.zip bitcoin-classic-0.13.4-windows-x86_64/
+mkdir -p bitcoin-classic-0.14.0-windows-x86_64
+cp bitcoind.exe bitcoin-cli.exe bitcoin-tx.exe qt/bitcoin-qt.exe bitcoin-classic-0.14.0-windows-x86_64/
+zip -r bitcoin-classic-0.14.0-windows-x86_64.zip bitcoin-classic-0.14.0-windows-x86_64/
 ```
 
 Memory Requirements

@@ -1703,7 +1703,7 @@ bool ReadBlockFromDisk(CBlock& block, const CDiskBlockPos& pos, const Consensus:
     }
 
     // Check the header
-    if (!CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
+    if (!CheckProofOfWork(block, consensusParams))
         return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
 
     return true;
@@ -2360,15 +2360,13 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     int64_t nTime1 = GetTimeMicros(); nTimeCheck += nTime1 - nTimeStart;
     LogPrint("bench", "    - Sanity checks: %.2fms [%.2fs]\n", 0.001 * (nTime1 - nTimeStart), nTimeCheck * 0.000001);
 
-    // Check against hash surge and fast blocks (enforce after certain height)
+    // Check against hash surge and fast blocks (enforce before activation height)
     int64_t nMinSpacing = 480; // 8 minutes - matches miner.cpp
+    bool fSpacingEnforced = pindex && pindex->pprev &&
+                            pindex->nHeight >= chainparams.GetConsensus().nMinBlockSpacingStartHeight &&
+                            pindex->nHeight < chainparams.GetConsensus().nNoMinSpacingActivationHeight;
 
-    bool fSkipFastBlockCheck = pindex && pindex->pprev &&
-        pindex->pprev->nHeight >= 136499 && pindex->pprev->nHeight <= 136998;
-
-    if (nMinSpacing > 0 && pindex && pindex->pprev && 
-        pindex->nHeight >= chainparams.GetConsensus().nMinBlockSpacingStartHeight &&
-        !fSkipFastBlockCheck &&
+    if (nMinSpacing > 0 && fSpacingEnforced &&
         block.GetBlockTime() - pindex->pprev->GetBlockTime() < nMinSpacing) {
         
         LogPrintf("Rejected fast block at height %d (timeDiff=%d sec, required=%d sec)\n",
@@ -3416,7 +3414,7 @@ bool FindUndoPos(CValidationState &state, int nFile, CDiskBlockPos &pos, unsigne
 bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW)
 {
     // Check proof of work matches claimed amount
-    if (fCheckPOW && !CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
+    if (fCheckPOW && !CheckProofOfWork(block, consensusParams))
         return state.DoS(50, false, REJECT_INVALID, "high-hash", false, "proof of work failed");
 
     return true;
@@ -3559,6 +3557,41 @@ std::vector<unsigned char> GenerateCoinbaseCommitment(CBlock& block, const CBloc
 
 bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& state, const Consensus::Params& consensusParams, CBlockIndex * const pindexPrev, int64_t nAdjustedTime)
 {
+    const int nHeight = pindexPrev ? pindexPrev->nHeight + 1 : 0;
+
+    const bool signalsAuxpow = block.IsAuxpow();
+    const bool hasAuxpowPayload = static_cast<bool>(block.auxpow);
+    const bool chainMatches = (block.GetChainId() == consensusParams.nAuxpowChainId);
+
+    if (nHeight < consensusParams.nAuxpowStartHeight) {
+        if ((signalsAuxpow && chainMatches) || hasAuxpowPayload) {
+            return state.Invalid(false, REJECT_INVALID, "bad-auxpow-premature", "auxpow not active");
+        }
+    } else {
+        // After activation, enforce chain ID for auxpow blocks
+        if (signalsAuxpow && !chainMatches) {
+            return state.Invalid(false, REJECT_INVALID, "bad-auxpow-chainid", "auxpow signalled for wrong chain id");
+        }
+
+        if (hasAuxpowPayload && !signalsAuxpow) {
+            return state.Invalid(false, REJECT_INVALID, "bad-auxpow-flag", "auxpow payload present without flag");
+        }
+
+        if (signalsAuxpow && !hasAuxpowPayload) {
+            return state.Invalid(false, REJECT_INVALID, "bad-auxpow-missing", "auxpow payload missing");
+        }
+
+        if (!signalsAuxpow) {
+            const int legacyAllowance = consensusParams.nLegacyBlocksBeforeAuxpow;
+            if (legacyAllowance >= 0) {
+                const int legacyLimitHeight = consensusParams.nAuxpowStartHeight + legacyAllowance;
+                if (nHeight > legacyLimitHeight) {
+                    return state.Invalid(false, REJECT_INVALID, "bad-auxpow-legacy", "legacy block after auxpow grace period");
+                }
+            }
+        }
+    }
+
     if (pindexPrev && pindexPrev->nHeight < 112400) {
         //LogPrintf("Skipping difficulty check for block %d, below block 97000\n", pindexPrev->nHeight);
         return true;  // Allow block even if proof of work is incorrect for blocks before 97000
@@ -3592,13 +3625,12 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     if (block.GetBlockTime() <= pindexPrev->GetMedianTimePast())
         return state.Invalid(false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
 
-    // Check timestamp against prev
-    if (block.GetBlockTime() <= pindexPrev->GetMedianTimePast())
-        return state.Invalid(false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
-
-    // // Check timestamp
-    // if (block.GetBlockTime() > nAdjustedTime + 2 * 60 * 60)
-    //    return state.Invalid(false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
+    // Check timestamp - use standard 2-hour future timestamp window
+    // Note: After block 136500 (spacing removal), the network experienced mixed old/new miner blocks
+    // causing some backward timestamps (blocks 136775, 136785, etc). These are already in the chain
+    // and must be accepted during sync. We only enforce future timestamp limits.
+    if (block.GetBlockTime() > nAdjustedTime + 2 * 60 * 60)
+        return state.Invalid(false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
 
     // Reject outdated version blocks when 95% (75% on testnet) of the network has upgraded:
     for (int32_t version = 2; version < 5; ++version) // check for version 2, 3 and 4 upgrades
@@ -5963,8 +5995,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
         headers.resize(nCount);
         for (unsigned int n = 0; n < nCount; n++) {
-            vRecv >> headers[n];
-            ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
+            try {
+                vRecv >> headers[n];
+                ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
+            } catch (const std::ios_base::failure& e) {
+                // Handle truncated or malformed headers messages
+                // This can happen with peers running old software or network corruption
+                LogPrint("net", "headers message deserialization failed at header %u/%u: %s\n",
+                        n, nCount, e.what());
+                // Resize to only include successfully deserialized headers
+                headers.resize(n);
+                break;
+            }
         }
 
         {

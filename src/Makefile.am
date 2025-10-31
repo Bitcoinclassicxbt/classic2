@@ -5,7 +5,7 @@
 DIST_SUBDIRS = secp256k1 univalue
 
 AM_LDFLAGS = $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS)
-AM_CXXFLAGS = $(HARDENED_CXXFLAGS)
+AM_CXXFLAGS = $(HARDENED_CXXFLAGS) -Wno-deprecated-declarations
 AM_CPPFLAGS = $(HARDENED_CPPFLAGS)
 EXTRA_LIBRARIES =
 
@@ -173,6 +173,7 @@ libbitcoin_server_a_SOURCES = \
   chain.cpp \
   chainstability.cpp \
   checkpoints.cpp \
+  auxpow.cpp \
   httprpc.cpp \
   httpserver.cpp \
   init.cpp \
@@ -185,8 +186,10 @@ libbitcoin_server_a_SOURCES = \
   policy/fees.cpp \
   policy/policy.cpp \
   pow.cpp \
+  primitives/pureheader.cpp \
   rest.cpp \
   rpc/blockchain.cpp \
+  rpc/auxpow_miner.cpp \
   rpc/mining.cpp \
   rpc/misc.cpp \
   rpc/net.cpp \

@@ -7,6 +7,7 @@
 #define BITCOIN_MINER_H
 
 #include "primitives/block.h"
+#include "primitives/pureheader.h"
 #include "txmempool.h"
 
 #include <stdint.h>
@@ -30,6 +31,7 @@ struct CBlockTemplate
     std::vector<CAmount> vTxFees;
     std::vector<int64_t> vTxSigOpsCost;
     std::vector<unsigned char> vchCoinbaseCommitment;
+    CPureBlockHeader auxMiningHeader;
 };
 
 // Container for tracking updates to ancestor feerate as we include (parent)

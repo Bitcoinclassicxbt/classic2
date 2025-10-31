@@ -6,9 +6,14 @@
 #ifndef BITCOIN_PRIMITIVES_BLOCK_H
 #define BITCOIN_PRIMITIVES_BLOCK_H
 
+#include "primitives/pureheader.h"
 #include "primitives/transaction.h"
+#include "auxpow.h"
 #include "serialize.h"
 #include "uint256.h"
+
+#include <ios>
+#include <memory>
 
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
@@ -17,16 +22,11 @@
  * in the block is a special one that creates a new coin owned by the creator
  * of the block.
  */
-class CBlockHeader
+class CBlockHeader : public CPureBlockHeader
 {
 public:
-    // header
-    int32_t nVersion;
-    uint256 hashPrevBlock;
-    uint256 hashMerkleRoot;
-    uint32_t nTime;
-    uint32_t nBits;
-    uint32_t nNonce;
+    // [AUXPOW PORT] Optional AuxPoW payload for merge-mined blocks
+    std::shared_ptr<CAuxPow> auxpow;
 
     CBlockHeader()
     {
@@ -37,35 +37,50 @@ public:
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        READWRITE(this->nVersion);
-        READWRITE(hashPrevBlock);
-        READWRITE(hashMerkleRoot);
-        READWRITE(nTime);
-        READWRITE(nBits);
-        READWRITE(nNonce);
+        READWRITE(static_cast<CPureBlockHeader&>(*this));
+
+        // When calculating the hash (SER_GETHASH), we only serialize the pure header
+        // and exclude the auxpow data. The block hash is always calculated from just
+        // the 80-byte header (nVersion, hashPrevBlock, hashMerkleRoot, nTime, nBits, nNonce).
+        if (nType & SER_GETHASH) {
+            return;
+        }
+
+        const int chainId = GetChainId();
+        const bool expectAuxpow = IsAuxpow() && chainId > 0 && chainId < 0x0100;
+
+        if (expectAuxpow) {
+            if (ser_action.ForRead()) {
+                auxpow = std::make_shared<CAuxPow>();
+            }
+            // Only enforce auxpow presence during READ operations (deserialization).
+            // During WRITE operations (serialization), allow null auxpow to support
+            // test cases that need to create invalid blocks for validation testing.
+            if (ser_action.ForRead() && !auxpow) {
+                throw std::ios_base::failure("AuxPow flag set but payload missing");
+            }
+            if (auxpow) {
+                READWRITE(*auxpow);
+            }
+        } else if (ser_action.ForRead()) {
+            auxpow.reset();
+        }
     }
 
     void SetNull()
     {
-        nVersion = 0;
-        hashPrevBlock.SetNull();
-        hashMerkleRoot.SetNull();
-        nTime = 0;
-        nBits = 0;
-        nNonce = 0;
+        CPureBlockHeader::SetNull();
+        auxpow.reset();
     }
 
     bool IsNull() const
     {
-        return (nBits == 0);
+        return CPureBlockHeader::IsNull();
     }
 
     uint256 GetHash() const;
 
-    int64_t GetBlockTime() const
-    {
-        return (int64_t)nTime;
-    }
+    void SetAuxpow(std::unique_ptr<CAuxPow> apow);
 };
 
 
@@ -107,12 +122,8 @@ public:
     CBlockHeader GetBlockHeader() const
     {
         CBlockHeader block;
-        block.nVersion       = nVersion;
-        block.hashPrevBlock  = hashPrevBlock;
-        block.hashMerkleRoot = hashMerkleRoot;
-        block.nTime          = nTime;
-        block.nBits          = nBits;
-        block.nNonce         = nNonce;
+        static_cast<CPureBlockHeader&>(block) = static_cast<const CPureBlockHeader&>(*this);
+        block.auxpow = auxpow;
         return block;
     }
 
