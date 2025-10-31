@@ -3571,6 +3571,12 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     }
 
     if (pindexPrev &&
+        (pindexPrev->nHeight >= 126800 && pindexPrev->nHeight <= 128900)) {
+        //LogPrintf("Skipping difficulty check for block %d, special exception\n", pindexPrev->nHeight + 1);
+        return true;
+    }
+
+    if (pindexPrev &&
         (pindexPrev->nHeight >= 136499 && pindexPrev->nHeight <= 136998)) {
         //LogPrintf("Skipping difficulty check for block %d, special exception\n", pindexPrev->nHeight + 1);
         return true;
