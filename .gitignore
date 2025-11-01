@@ -114,6 +114,7 @@ share/BitcoindComparisonTool.jar
 # Documentation
 /doc/doxygen/
 *.dmg
+.claude/
 
 # Generated files
 libbitcoinconsensus.pc
