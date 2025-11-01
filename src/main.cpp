@@ -3592,11 +3592,11 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     if (block.GetBlockTime() <= pindexPrev->GetMedianTimePast())
         return state.Invalid(false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
 
-    // Check timestamp against prev
-    if (block.GetBlockTime() <= pindexPrev->GetMedianTimePast())
-        return state.Invalid(false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
-
-    // // Check timestamp
+    // Check timestamp - DISABLED during recovery from 8-min spacing enforcement
+    // If enabled, would reject blocks >2hr ahead of current time
+    // Current situation: MTP is ~41 hours ahead due to past 8-min spacing enforcement
+    // Recovery requires accepting blocks with timestamps far in future until real time catches up
+    // WARNING: Do NOT uncomment until blockchain time normalizes (check MTP vs current time)
     // if (block.GetBlockTime() > nAdjustedTime + 2 * 60 * 60)
     //    return state.Invalid(false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
 

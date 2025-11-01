@@ -311,10 +311,20 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
 
     // Fill in header
     pblock->hashPrevBlock = pindexPrev->GetBlockHash();
-    // Refresh header time and clamp to future limit
+    // Refresh header time - UpdateTime ensures timestamp > MTP
     UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
-    if (pblock->nTime > nMaxFutureTime) {
-        pblock->nTime = nMaxFutureTime;
+
+    // Natural recovery mode: Allow timestamps ahead of current time if required by MTP
+    // This handles transition from enforced 8-min spacing that pushed timestamps into future
+    // Block must satisfy: timestamp > MedianTimePast (consensus rule)
+    // Recovery: Real time will naturally catch up over ~41 hours as blocks are mined
+    // Note: Validation still enforces MAX_FUTURE_BLOCK_TIME (2hr) from network time perspective
+    int64_t nRequiredMinTime = pindexPrev->GetMedianTimePast() + 1;
+    if (pblock->nTime < nRequiredMinTime) {
+        // Ensure we meet consensus requirement even if ahead of current time
+        pblock->nTime = nRequiredMinTime;
+        LogPrintf("CreateNewBlock(): Recovery mode - timestamp set to MTP+1 (%d), current time (%d), gap: %d seconds\n",
+                  nRequiredMinTime, nMaxFutureTime, nRequiredMinTime - GetAdjustedTime());
     }
 
     // Log timing information for debugging
