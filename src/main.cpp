@@ -2366,19 +2366,31 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     bool fSkipFastBlockCheck = pindex && pindex->pprev &&
         pindex->pprev->nHeight >= 136499 && pindex->pprev->nHeight <= 136998;
 
-    if (nMinSpacing > 0 && pindex && pindex->pprev && 
+    // RECOVERY MODE: Skip fast-block check if timestamps are abnormal due to past enforcement
+    // During recovery from 8-min spacing, block times may appear negative or abnormal
+    // Only enforce spacing check when timestamps are increasing normally
+    int64_t nTimeDiff = block.GetBlockTime() - pindex->pprev->GetBlockTime();
+    bool fRecoveryMode = (nTimeDiff < 0 || nTimeDiff > 86400); // Negative or >24 hours indicates recovery needed
+
+    if (nMinSpacing > 0 && pindex && pindex->pprev &&
         pindex->nHeight >= chainparams.GetConsensus().nMinBlockSpacingStartHeight &&
         !fSkipFastBlockCheck &&
-        block.GetBlockTime() - pindex->pprev->GetBlockTime() < nMinSpacing) {
-        
+        !fRecoveryMode &&
+        nTimeDiff < nMinSpacing) {
+
         LogPrintf("Rejected fast block at height %d (timeDiff=%d sec, required=%d sec)\n",
                 pindex->nHeight,
-                block.GetBlockTime() - pindex->pprev->GetBlockTime(),
+                nTimeDiff,
                 nMinSpacing);
-        
+
         return state.DoS(100, false, REJECT_INVALID, "fast-block",
                         false, strprintf("block arrived too quickly after previous (%d sec < %d sec)",
-                                        block.GetBlockTime() - pindex->pprev->GetBlockTime(), nMinSpacing));
+                                        nTimeDiff, nMinSpacing));
+    }
+
+    if (fRecoveryMode && pindex && pindex->pprev) {
+        LogPrintf("Recovery mode: Skipping fast-block check at height %d (timeDiff=%d sec)\n",
+                pindex->nHeight, nTimeDiff);
     }
 
     // Do not allow blocks that contain transactions which 'overwrite' older transactions,
