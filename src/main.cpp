@@ -3606,8 +3606,8 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
         return state.Invalid(false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
 
     // Check timestamp against 2-hour future limit (re-enabled after hard fork)
-    const Consensus::Params& consensusParams = Params().GetConsensus();
-    if (pindexPrev && pindexPrev->nHeight + 1 >= consensusParams.nHardForkHeight) {
+    const Consensus::Params& hardforkParams = Params().GetConsensus();
+    if (pindexPrev && pindexPrev->nHeight + 1 >= hardforkParams.nHardForkHeight) {
         if (block.GetBlockTime() > nAdjustedTime + 2 * 60 * 60)
             return state.Invalid(false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
     }
