@@ -76,6 +76,9 @@ struct Params {
     /** Minimum block spacing enforcement start height */
     int nMinBlockSpacingStartHeight;
 
+    /** Hard fork activation height - removes 8-min spacing enforcement, re-enables 2hr timestamp check */
+    int nHardForkHeight;
+
     /** Helper functions for new difficulty system */
     int64_t AveragingWindowTimespan() const {
         if (nPowAveragingWindow <= 0 || nPostBlossomPowTargetSpacing <= 0) return 1;

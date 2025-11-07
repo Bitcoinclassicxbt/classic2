@@ -2360,37 +2360,38 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     int64_t nTime1 = GetTimeMicros(); nTimeCheck += nTime1 - nTimeStart;
     LogPrint("bench", "    - Sanity checks: %.2fms [%.2fs]\n", 0.001 * (nTime1 - nTimeStart), nTimeCheck * 0.000001);
 
-    // Check against hash surge and fast blocks (enforce after certain height)
-    int64_t nMinSpacing = 480; // 8 minutes - matches miner.cpp
+    // Check against fast blocks (only enforced before hard fork)
+    // After hard fork at height 138440, no minimum block spacing enforcement
+    if (pindex && pindex->nHeight < chainparams.GetConsensus().nHardForkHeight) {
+        int64_t nMinSpacing = GetArg("-minblockspacing", 0); // Use config value, default disabled
 
-    bool fSkipFastBlockCheck = pindex && pindex->pprev &&
-        pindex->pprev->nHeight >= 136499 && pindex->pprev->nHeight <= 136998;
+        bool fSkipFastBlockCheck = pindex && pindex->pprev &&
+            pindex->pprev->nHeight >= 136499 && pindex->pprev->nHeight <= 136998;
 
-    // RECOVERY MODE: Skip fast-block check if timestamps are abnormal due to past enforcement
-    // During recovery from 8-min spacing, block times may appear negative or abnormal
-    // Only enforce spacing check when timestamps are increasing normally
-    int64_t nTimeDiff = block.GetBlockTime() - pindex->pprev->GetBlockTime();
-    bool fRecoveryMode = (nTimeDiff < 0 || nTimeDiff > 86400); // Negative or >24 hours indicates recovery needed
+        // RECOVERY MODE: Skip fast-block check if timestamps are abnormal due to past enforcement
+        int64_t nTimeDiff = block.GetBlockTime() - pindex->pprev->GetBlockTime();
+        bool fRecoveryMode = (nTimeDiff < 0 || nTimeDiff > 86400); // Negative or >24 hours indicates recovery needed
 
-    if (nMinSpacing > 0 && pindex && pindex->pprev &&
-        pindex->nHeight >= chainparams.GetConsensus().nMinBlockSpacingStartHeight &&
-        !fSkipFastBlockCheck &&
-        !fRecoveryMode &&
-        nTimeDiff < nMinSpacing) {
+        if (nMinSpacing > 0 && pindex && pindex->pprev &&
+            pindex->nHeight >= chainparams.GetConsensus().nMinBlockSpacingStartHeight &&
+            !fSkipFastBlockCheck &&
+            !fRecoveryMode &&
+            nTimeDiff < nMinSpacing) {
 
-        LogPrintf("Rejected fast block at height %d (timeDiff=%d sec, required=%d sec)\n",
-                pindex->nHeight,
-                nTimeDiff,
-                nMinSpacing);
+            LogPrintf("Rejected fast block at height %d (timeDiff=%d sec, required=%d sec)\n",
+                    pindex->nHeight,
+                    nTimeDiff,
+                    nMinSpacing);
 
-        return state.DoS(100, false, REJECT_INVALID, "fast-block",
-                        false, strprintf("block arrived too quickly after previous (%d sec < %d sec)",
-                                        nTimeDiff, nMinSpacing));
-    }
+            return state.DoS(100, false, REJECT_INVALID, "fast-block",
+                            false, strprintf("block arrived too quickly after previous (%d sec < %d sec)",
+                                            nTimeDiff, nMinSpacing));
+        }
 
-    if (fRecoveryMode && pindex && pindex->pprev) {
-        LogPrintf("Recovery mode: Skipping fast-block check at height %d (timeDiff=%d sec)\n",
-                pindex->nHeight, nTimeDiff);
+        if (fRecoveryMode && pindex && pindex->pprev) {
+            LogPrintf("Recovery mode: Skipping fast-block check at height %d (timeDiff=%d sec)\n",
+                    pindex->nHeight, nTimeDiff);
+        }
     }
 
     // Do not allow blocks that contain transactions which 'overwrite' older transactions,
@@ -3604,13 +3605,12 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     if (block.GetBlockTime() <= pindexPrev->GetMedianTimePast())
         return state.Invalid(false, REJECT_INVALID, "time-too-old", "block's timestamp is too early");
 
-    // Check timestamp - DISABLED during recovery from 8-min spacing enforcement
-    // If enabled, would reject blocks >2hr ahead of current time
-    // Current situation: MTP is ~41 hours ahead due to past 8-min spacing enforcement
-    // Recovery requires accepting blocks with timestamps far in future until real time catches up
-    // WARNING: Do NOT uncomment until blockchain time normalizes (check MTP vs current time)
-    // if (block.GetBlockTime() > nAdjustedTime + 2 * 60 * 60)
-    //    return state.Invalid(false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
+    // Check timestamp against 2-hour future limit (re-enabled after hard fork)
+    const Consensus::Params& consensusParams = Params().GetConsensus();
+    if (pindexPrev && pindexPrev->nHeight + 1 >= consensusParams.nHardForkHeight) {
+        if (block.GetBlockTime() > nAdjustedTime + 2 * 60 * 60)
+            return state.Invalid(false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
+    }
 
     // Reject outdated version blocks when 95% (75% on testnet) of the network has upgraded:
     for (int32_t version = 2; version < 5; ++version) // check for version 2, 3 and 4 upgrades

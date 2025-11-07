@@ -151,8 +151,7 @@ void BlockAssembler::resetBlock()
     const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
 
     // Voluntary minimum block spacing for responsible mining (non-consensus)
-    //int64_t nMinSpacing = GetArg("-minblockspacing", 480); // Default 8 minutes
-    int64_t nMinSpacing = std::max(GetArg("-minblockspacing", 480), static_cast<int64_t>(480));
+    int64_t nMinSpacing = GetArg("-minblockspacing", 0); // Default disabled
     if (nMinSpacing > 0) {
         int64_t nMinTime = pindexPrev->GetBlockTime() + nMinSpacing;
         int64_t nMaxTime = GetAdjustedTime() + 7200; // MAX_FUTURE_BLOCK_TIME = 7200 seconds
@@ -273,7 +272,7 @@ CBlockTemplate* BlockAssembler::CreateNewBlock(const CScript& scriptPubKeyIn)
     //}
 
     // Minimum spacing for logging/monitoring only
-    int64_t nMinSpacing = std::max(GetArg("-minblockspacing", 480), static_cast<int64_t>(480));
+    int64_t nMinSpacing = GetArg("-minblockspacing", 0); // Default disabled
     int64_t nMinAllowedTime = nMedianTimePast + 1;
 
     // Start from current time while satisfying consensus minimum

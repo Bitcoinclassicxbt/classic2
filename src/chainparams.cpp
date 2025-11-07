@@ -90,8 +90,9 @@ public:
         //consensus.nPowMaxAdjustUp = 16; // 16% adjustment up
         consensus.nPowMaxAdjustUp = 13; // 13% adjustment up - less aggressive, Doesn't jump too fast and overshoot target block spacing
         consensus.nPostBlossomPowTargetSpacing = 10 * 60; // Keep 10 minute blocks
-        consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing 
-        consensus.nMinBlockSpacingStartHeight = 126800; //surge control start block
+        consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
+        consensus.nMinBlockSpacingStartHeight = 126800; //surge control start block (deprecated)
+        consensus.nHardForkHeight = 138440; // Hard fork: removes 8-min spacing, re-enables 2hr timestamp check
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
@@ -219,14 +220,15 @@ public:
         consensus.fPowNoRetargeting = false;
 
         // New difficulty adjustment parameters for testnet
-        consensus.nNewPowDiffHeight = 100; // Activate new algorithm early on testnet
+        consensus.nNewPowDiffHeight = 50; // Activate new algorithm at block 50 on testnet
         consensus.nPowAveragingWindow = 17; // 17 block averaging window
         consensus.nPowMaxAdjustDown = 32; // 32% adjustment down
         consensus.nPowMaxAdjustUp = 16; // 16% adjustment up
         consensus.nPostBlossomPowTargetSpacing = 10 * 60; // Keep 10 minute blocks
         consensus.nRuleChangeActivationThreshold = 1512; // 75% for testchains
         consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
-        consensus.nMinBlockSpacingStartHeight = 4; //set
+        consensus.nMinBlockSpacingStartHeight = 4; //set (deprecated)
+        consensus.nHardForkHeight = 0; // Hard fork active from genesis on testnet
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
@@ -318,7 +320,8 @@ public:
         consensus.nPowMaxAdjustUp = 0; // Turn off adjustment
         consensus.nPostBlossomPowTargetSpacing = 10 * 60; // Keep 10 minute blocks
         consensus.nMinerConfirmationWindow = 144; // Faster than normal for regtest (144 instead of 2016)
-        consensus.nMinBlockSpacingStartHeight = 0;
+        consensus.nMinBlockSpacingStartHeight = 0; // (deprecated)
+        consensus.nHardForkHeight = 0; // Hard fork active from genesis on regtest
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 0;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 999999999999ULL;
