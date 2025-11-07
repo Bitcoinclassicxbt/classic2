@@ -92,7 +92,7 @@ public:
         consensus.nPostBlossomPowTargetSpacing = 10 * 60; // Keep 10 minute blocks
         consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
         consensus.nMinBlockSpacingStartHeight = 126800; //surge control start block (deprecated)
-        consensus.nHardForkHeight = 138440; // Hard fork: removes 8-min spacing, re-enables 2hr timestamp check
+        consensus.nHardForkHeight = 138392; // Hard fork: removes 8-min spacing, re-enables 2hr timestamp check
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
