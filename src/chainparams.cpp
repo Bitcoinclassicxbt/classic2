@@ -92,7 +92,7 @@ public:
         consensus.nPostBlossomPowTargetSpacing = 10 * 60; // Keep 10 minute blocks
         consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
         consensus.nMinBlockSpacingStartHeight = 126800; //surge control start block (deprecated)
-        consensus.nHardForkHeight = 138001; // Hard fork: removes 8-min spacing, re-enables 2hr timestamp check
+        consensus.nHardForkHeight = 138442; // Hard fork: removes 8-min spacing, re-enables 2hr timestamp check
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
@@ -191,7 +191,7 @@ public:
             ( 136774, uint256S("0x000000000000000674eee99b77ce3edadca0a2b7527b5c21532c08ea61e15e55"))
             ( 136800, uint256S("0x00000000000000077727c04b5effe974c4efefc94e7c89141e6414d9c28a7f93"))
             ( 136900, uint256S("0x00000000000000065cbfca40faa259eab79dd395b609d4195c5fdc629cdc9a4e"))
-            ( 138005, uint256S("0x0000000000000000865ae35adf733a5807cda9d48f800a8e280f3c0361099cab")),
+            ( 138445, uint256S("0000000000000002a9181b2875f07fd24826ca4a9d01985c6f74c623c7727756")),
             0, // * UNIX timestamp of last checkpoint block
             0,   // * total number of transactions between genesis and last checkpoint
                         //   (the tx=... number in the SetBestChain debug.log lines)

@@ -2361,7 +2361,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     LogPrint("bench", "    - Sanity checks: %.2fms [%.2fs]\n", 0.001 * (nTime1 - nTimeStart), nTimeCheck * 0.000001);
 
     // Check against fast blocks (only enforced before hard fork)
-    // After hard fork at height 138001, no minimum block spacing enforcement
+    // After hard fork at height 138442, no minimum block spacing enforcement
     if (pindex && pindex->nHeight < chainparams.GetConsensus().nHardForkHeight) {
         int64_t nMinSpacing = GetArg("-minblockspacing", 0); // Use config value, default disabled
 
