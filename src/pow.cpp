@@ -9,6 +9,7 @@
 #include "chain.h"
 #include "primitives/block.h"
 #include "uint256.h"
+#include "util.h"
 
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
 {
@@ -156,40 +157,46 @@ unsigned int GetNextWorkRequiredNew(const CBlockIndex* pindexLast, const CBlockH
         return nProofOfWorkMin;
     }
 
-    // New emergency rule (height 126800 and above)
-    if (pindexLast->nHeight >= 127464 && pindexLast->nHeight <= 127927 && pblock) {
-    int64_t time_diff = pblock->GetBlockTime() - pindexLast->GetBlockTime();
-    int64_t spacing = params.nPostBlossomPowTargetSpacing;
-    
-    arith_uint256 lastTarget;
-    lastTarget.SetCompact(pindexLast->nBits);
-    
-    arith_uint256 maxTarget;
-    maxTarget.SetCompact(nProofOfWorkMax);
-    
-    if (time_diff > spacing * 8) {
-        // 8x delay: minimum difficulty
-        //LogPrintf("Emergency: 8x delay triggered, using minimum difficulty\n");
-        return nProofOfWorkMax;
-    } else if (time_diff > spacing * 6) {
-        // 6x delay: 65% easier (35% of current difficulty)
-        //LogPrintf("Emergency: 6x delay triggered, making 65%% easier\n");
-        lastTarget = lastTarget * 100 / 35;
-    } else if (time_diff > spacing * 3) {
-        // 3x delay: 50% easier (50% of current difficulty)
-        //LogPrintf("Emergency: 3x delay triggered, making 50%% easier\n");
-        lastTarget = lastTarget * 100 / 50;
-    }
-    
-    // Cap at minimum difficulty (maximum target)
-    if (lastTarget > maxTarget) {
-        return nProofOfWorkMax;
-    }
-    
-    return lastTarget.GetCompact();
-}
+    // Emergency rules for specific height ranges
+    // NOTE: Before hard fork height, maintain historical buggy behavior for sync compatibility
 
-if (pindexLast->nHeight >= 127926 && pblock) {
+    // Range 1: Heights 127464-127927
+    if (pindexLast->nHeight >= 127464 && pindexLast->nHeight <= 127927 && pblock) {
+        int64_t time_diff = pblock->GetBlockTime() - pindexLast->GetBlockTime();
+        int64_t spacing = params.nPostBlossomPowTargetSpacing;
+
+        arith_uint256 lastTarget;
+        lastTarget.SetCompact(pindexLast->nBits);
+
+        arith_uint256 maxTarget;
+        maxTarget.SetCompact(nProofOfWorkMax);
+
+        if (time_diff > spacing * 8) {
+            return nProofOfWorkMax;
+        } else if (time_diff > spacing * 6) {
+            lastTarget = lastTarget * 100 / 35;
+        } else if (time_diff > spacing * 3) {
+            lastTarget = lastTarget * 100 / 50;
+        }
+
+        if (lastTarget > maxTarget) {
+            return nProofOfWorkMax;
+        }
+
+        return lastTarget.GetCompact();
+    }
+
+    // Range 2: Heights 127928+ on mainnet, or after new algo activation on testnets
+    // Before hard fork: buggy behavior (overlaps 127926-127927 and always returns)
+    // After hard fork: fixed behavior (only emergency, falls through to normal algo)
+    // On testnet/regtest: Use hard fork height to determine when to apply new rules
+    int nEmergencyRuleHeight = 127928;  // Mainnet height
+    if (params.fPowAllowMinDifficultyBlocks) {
+        // Testnet/regtest: activate emergency rules at same height as new algorithm
+        nEmergencyRuleHeight = params.nNewPowDiffHeight;
+    }
+
+    if (pindexLast->nHeight >= nEmergencyRuleHeight && pblock) {
         int64_t time_diff = pblock->GetBlockTime() - pindexLast->GetBlockTime();
         int64_t spacing = params.nPostBlossomPowTargetSpacing;
 
@@ -199,26 +206,94 @@ if (pindexLast->nHeight >= 127926 && pblock) {
         arith_uint256 maxTarget;
         maxTarget.SetCompact(nProofOfWorkMid);
 
+        // Before hard fork: maintain buggy behavior (always returns)
+        if (pindexLast->nHeight < params.nHardForkHeight) {
+            // Old buggy behavior: returns even if no emergency triggered
+            if (time_diff > spacing * 8) {
+                return nProofOfWorkMid;
+            } else if (time_diff > spacing * 6) {
+                lastTarget = lastTarget * 100 / 35;
+            } else if (time_diff > spacing * 3) {
+                lastTarget = lastTarget * 100 / 50;
+            }
+
+            if (lastTarget > maxTarget) {
+                return nProofOfWorkMid;
+            }
+
+            return lastTarget.GetCompact();  // Always returned (bug)
+        }
+
+        // After hard fork: NEW emergency rules for extreme conditions
+
+        // FAST BLOCK EMERGENCY: Blocks arriving too quickly (hashrate spike)
+        // Only trigger if sustained fast blocks, not just one lucky block
+        if (time_diff < 120) {  // Block came in < 2 minutes
+            // Calculate average block time over last 17 blocks to confirm sustained spike
+            const CBlockIndex* pindexCheck = pindexLast;
+            int64_t totalTime = 0;
+            int count = 0;
+
+            for (int i = 0; i < params.nPowAveragingWindow && pindexCheck && pindexCheck->pprev; i++) {
+                totalTime += pindexCheck->GetBlockTime() - pindexCheck->pprev->GetBlockTime();
+                pindexCheck = pindexCheck->pprev;
+                count++;
+            }
+
+            if (count > 0) {
+                int64_t avgBlockTime = totalTime / count;
+
+                // If average is also very fast (< 5 min), it's a sustained spike
+                if (avgBlockTime < 300) {
+                    // Double the difficulty immediately
+                    arith_uint256 fastTarget;
+                    fastTarget.SetCompact(pindexLast->nBits);
+                    fastTarget /= 2;  // Half the target = double the difficulty
+
+                    LogPrintf("Emergency: Fast block detected at height %d (block_time=%ds, avg=%ds). Doubling difficulty.\n",
+                            pindexLast->nHeight + 1, time_diff, avgBlockTime);
+
+                    return fastTarget.GetCompact();
+                }
+            }
+        }
+
+        // SLOW BLOCK EMERGENCY: Strengthened rules for hashrate drops
         if (time_diff > spacing * 8) {
-            // 8x delay: minimum difficulty
-            //LogPrintf("Emergency: 8x delay triggered, using minimum difficulty\n");
+            // Extreme delay (>80 min): drop to minimum difficulty
+            LogPrintf("Emergency: Extreme delay at height %d (%d min). Dropping to minimum difficulty.\n",
+                    pindexLast->nHeight + 1, time_diff / 60);
             return nProofOfWorkMid;
         } else if (time_diff > spacing * 6) {
-            // 6x delay: 65% easier (35% of current difficulty)
-            //LogPrintf("Emergency: 6x delay triggered, making 65%% easier\n");
+            // Severe delay (>60 min): 65% easier
             lastTarget = lastTarget * 100 / 35;
+            if (lastTarget > maxTarget) {
+                return nProofOfWorkMid;
+            }
+            LogPrintf("Emergency: Severe delay at height %d (%d min). Making 65%% easier.\n",
+                    pindexLast->nHeight + 1, time_diff / 60);
+            return lastTarget.GetCompact();
+        } else if (time_diff > spacing * 4) {
+            // Major delay (>40 min): 75% easier (STRENGTHENED from 50%)
+            lastTarget = lastTarget * 100 / 25;
+            if (lastTarget > maxTarget) {
+                return nProofOfWorkMid;
+            }
+            LogPrintf("Emergency: Major delay at height %d (%d min). Making 75%% easier.\n",
+                    pindexLast->nHeight + 1, time_diff / 60);
+            return lastTarget.GetCompact();
         } else if (time_diff > spacing * 3) {
-            // 3x delay: 50% easier (50% of current difficulty)
-            //LogPrintf("Emergency: 3x delay triggered, making 50%% easier\n");
+            // Moderate delay (>30 min): 50% easier
             lastTarget = lastTarget * 100 / 50;
+            if (lastTarget > maxTarget) {
+                return nProofOfWorkMid;
+            }
+            LogPrintf("Emergency: Moderate delay at height %d (%d min). Making 50%% easier.\n",
+                    pindexLast->nHeight + 1, time_diff / 60);
+            return lastTarget.GetCompact();
         }
 
-        // Cap at minimum difficulty (maximum target)
-        if (lastTarget > maxTarget) {
-            return nProofOfWorkMid;
-        }
-
-        return lastTarget.GetCompact();
+        // No emergency: fall through to normal algorithm below
     }
 
 
