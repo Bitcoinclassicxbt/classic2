@@ -37,6 +37,7 @@
 #include "utilstrencodings.h"
 #include "validationinterface.h"
 #include "versionbits.h"
+#include "version.h"
 
 #include <atomic>
 #include <sstream>
@@ -5064,6 +5065,21 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
+        {
+            LOCK(cs_main);
+            const int nHardForkHeight = chainparams.GetConsensus().nHardForkHeight;
+            const int nChainHeight = chainActive.Height();
+            if (nChainHeight >= nHardForkHeight && pfrom->nVersion < HARDFORK_PROTO_VERSION)
+            {
+                LogPrintf("peer=%d using obsolete protocol version %i after hard fork height %d; disconnecting\n",
+                          pfrom->id, pfrom->nVersion, nHardForkHeight);
+                pfrom->PushMessage(NetMsgType::REJECT, strCommand, REJECT_OBSOLETE,
+                                   strprintf("Protocol version must be %d or greater", HARDFORK_PROTO_VERSION));
+                pfrom->fDisconnect = true;
+                return false;
+            }
+        }
+
         if (pfrom->nVersion == 10300)
             pfrom->nVersion = 300;
         if (!vRecv.empty())
@@ -6555,6 +6571,13 @@ bool SendMessages(CNode* pto)
         TRY_LOCK(cs_main, lockMain); // Acquire cs_main for IsInitialBlockDownload() and CNodeState()
         if (!lockMain)
             return true;
+
+        if (chainActive.Height() >= consensusParams.nHardForkHeight && pto->nVersion < HARDFORK_PROTO_VERSION) {
+            LogPrintf("Disconnecting peer=%d with obsolete protocol version %d after hard fork height %d (requires >= %d)\n",
+                      pto->id, pto->nVersion, consensusParams.nHardForkHeight, HARDFORK_PROTO_VERSION);
+            pto->fDisconnect = true;
+            return true;
+        }
 
         // Address refresh broadcast
         int64_t nNow = GetTimeMicros();
