@@ -518,11 +518,20 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
         // TODO: Maybe recheck connections/IBD and (if something wrong) send an expires-immediately template to stop miners?
     }
 
+    const Consensus::Params& consensusParams = Params().GetConsensus();
+
     // Update block
     static CBlockIndex* pindexPrev;
     static int64_t nStart;
+    static unsigned int nBits;
     static CBlockTemplate* pblocktemplate;
-    if (pindexPrev != chainActive.Tip() ||
+
+    // Calculate current difficulty for the next block
+    CBlockIndex* pindexTip = chainActive.Tip();
+    unsigned int nCurrentBits = GetNextWorkRequired(pindexTip, NULL, consensusParams);
+
+    if (pindexPrev != pindexTip ||
+        nBits != nCurrentBits ||
         (mempool.GetTransactionsUpdated() != nTransactionsUpdatedLast && GetTime() - nStart > 5))
     {
         // Clear pindexPrev so future calls make a new block, despite any failures from here on
@@ -546,9 +555,9 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
 
         // Need to update only after we know CreateNewBlock succeeded
         pindexPrev = pindexPrevNew;
+        nBits = nCurrentBits;
     }
     CBlock* pblock = &pblocktemplate->block; // pointer for convenience
-    const Consensus::Params& consensusParams = Params().GetConsensus();
 
     // Update nTime
     UpdateTime(pblock, consensusParams, pindexPrev);
