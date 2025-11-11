@@ -526,12 +526,11 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
     static unsigned int nBits;
     static CBlockTemplate* pblocktemplate;
 
-    // Calculate current difficulty for the next block
+    // Always regenerate block template to ensure difficulty is current
+    // This is necessary because emergency difficulty rules depend on timestamps
     CBlockIndex* pindexTip = chainActive.Tip();
-    unsigned int nCurrentBits = GetNextWorkRequired(pindexTip, NULL, consensusParams);
 
     if (pindexPrev != pindexTip ||
-        nBits != nCurrentBits ||
         (mempool.GetTransactionsUpdated() != nTransactionsUpdatedLast && GetTime() - nStart > 5))
     {
         // Clear pindexPrev so future calls make a new block, despite any failures from here on
@@ -555,12 +554,24 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
 
         // Need to update only after we know CreateNewBlock succeeded
         pindexPrev = pindexPrevNew;
-        nBits = nCurrentBits;
+        // Store the actual difficulty from the created block for future cache validation
+        nBits = pblocktemplate->block.nBits;
     }
     CBlock* pblock = &pblocktemplate->block; // pointer for convenience
 
     // Update nTime
     UpdateTime(pblock, consensusParams, pindexPrev);
+
+    // Recalculate difficulty after time update - critical for emergency difficulty rules
+    // The timestamp may have changed enough to trigger different emergency thresholds
+    unsigned int nUpdatedBits = GetNextWorkRequired(pindexPrev, pblock, consensusParams);
+    if (nUpdatedBits != pblock->nBits) {
+        LogPrintf("getblocktemplate: Difficulty changed after time update (old=%08x, new=%08x)\n",
+                  pblock->nBits, nUpdatedBits);
+        pblock->nBits = nUpdatedBits;
+        nBits = nUpdatedBits;  // Update cached value
+    }
+
     pblock->nNonce = 0;
 
     // NOTE: If at some point we support pre-segwit miners post-segwit-activation, this needs to take segwit support into consideration
